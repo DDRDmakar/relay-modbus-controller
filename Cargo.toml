@@ -1,0 +1,12 @@
+[package]
+name = "relay-modbus-controller"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fltk = "1.2"
+tokio-modbus = { version = "0.5.2", default-features = false, features = ["rtu"] }
+tokio-serial = "5.4"
+tokio = { version = "1", features = ["full"] }
