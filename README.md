@@ -2,5 +2,6 @@
 Modbus relay controller  
 Developed with:  
 Rust + FLTK + tokio-modbus  
+  
 ![Alt text](img/713tfZIT58L._AC_SL1001_.jpg?raw=true "Board")  
-![Alt text](img/Screenshot_20220121_152138.png?raw=true "GUI")  
+![Alt text](img/window.png?raw=true "GUI")  
