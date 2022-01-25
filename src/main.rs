@@ -2,6 +2,7 @@
 use std::io::prelude::*;
 use std::time::Duration;
 use std::path::{Path, PathBuf};
+use std::collections::VecDeque;
 
 use fltk::{
 	app,
@@ -47,7 +48,7 @@ struct Main {
 	frame: Frame,
 	
 	buttons: Vec<Button>,
-	presets: Vec<PathBuf>,
+	presets: VecDeque<PathBuf>,
 	
 	input_com:    Input,
 	input_slave:  IntInput,
@@ -158,7 +159,7 @@ impl Main {
 			BUTTONH,
 			"Presets"
 		);
-		let presets = Vec::<PathBuf>::new();
+		let presets = VecDeque::<PathBuf>::new();
 
 		let mut button_select = Button::new(
 			SECOND_X,
@@ -251,10 +252,7 @@ impl Main {
 					dialog.show();
 					match fix_pathbuf_parts(&dialog.filenames()) {
 						Some(preset_filename) => {
-							if self.add_preset(&preset_filename.to_str().unwrap()) {
-								self.presets.push(preset_filename.into());
-								dbg!(&self.presets);
-							}
+							self.add_preset(&preset_filename);
 						},
 						None => {},
 					}
@@ -330,10 +328,7 @@ impl Main {
 				Some(Message::AddPreset) => {
 					let new_preset = self.input_preset.value();
 					if !new_preset.is_empty() {
-						if self.add_preset(&new_preset) {
-							self.presets.push(new_preset.into());
-							dbg!(&self.presets);
-						}
+						self.add_preset(&Path::new(&new_preset));
 					}
 				},
 				Some(Message::Save) => {
@@ -347,11 +342,7 @@ impl Main {
 								Ok(_)  => self.button_save.set_color(Color::Background),
 								Err(_) => self.button_save.set_color(Color::Red),
 							}
-
-							if self.add_preset(&preset_filename.to_str().unwrap()) {
-								self.presets.push(preset_filename.into());
-								dbg!(&self.presets);
-							}
+							self.add_preset(&preset_filename);
 						},
 						None => {},
 					}
@@ -436,20 +427,22 @@ impl Main {
 		Ok(state)
 	}
 
-	fn add_preset(&mut self, value: &str) -> bool {
-		let a = match self.menu_preset.choice() {
-			Some(_) => 0,
-			None    => 1,
-		};
-
-		let index = self.menu_preset.find_index(value);
-		if index == -1 {
-			self.menu_preset.add_choice(value);
-			self.menu_preset.set_value(self.menu_preset.size() - 1 - a);
+	fn add_preset(&mut self, filename: &Path) -> bool {
+		let filename_str = filename.to_str().unwrap();
+		let value: String = filename_str.replace("\\", "\\\\");
+		let index = self.presets.iter()
+			.position(|e| e == filename)
+			.unwrap_or(usize::MAX);
+		
+		if index == usize::MAX {
+			self.menu_preset.add_choice(&value);
+			self.presets.push_back(filename.into());
+			self.menu_preset.set_value(self.presets.len() as i32 - 1);
+			dbg!(&self.presets);
 			return true;
 		}
 		else {
-			self.menu_preset.set_value(index);
+			self.menu_preset.set_value(index as i32);
 			return false;
 		}
 	}
