@@ -200,6 +200,7 @@ impl Main {
 		for i in 0..16 {
 			buttons[i].set_callback(|b| {
 				if b.color() == Color::Inactive { b.set_color(Color::Green); } else { b.set_color(Color::Inactive); }
+				b.redraw();
 			});
 		}
 		
@@ -269,7 +270,10 @@ impl Main {
 									self.button_apply.set_color(Color::Background);
 									self.app.redraw();
 								},
-								Err(_) => { self.button_apply.set_color(Color::Red); },
+								Err(_) => {
+									self.button_apply.set_color(Color::Red);
+									self.button_apply.redraw();
+								},
 							}
 						},
 						_ => {},
@@ -312,7 +316,6 @@ impl Main {
 									Ok(v)  => {
 										self.button_get.set_color(Color::Background);
 										self.set_buttons(&v);
-										self.app.redraw();
 									},
 								};
 							},
@@ -325,6 +328,7 @@ impl Main {
 							_ => {},
 						}
 					}
+					self.app.redraw();
 				},
 				Some(Message::AddPreset) => {
 					let new_preset = self.input_preset.value();
@@ -343,6 +347,7 @@ impl Main {
 								Ok(_)  => self.button_save.set_color(Color::Background),
 								Err(_) => self.button_save.set_color(Color::Red),
 							}
+							self.button_save.redraw();
 							self.add_preset(&preset_filename);
 						},
 						None => {},
