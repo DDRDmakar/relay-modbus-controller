@@ -1,4 +1,4 @@
-# R4D3B16 board controller
+# eletechsup R4D3B16 board controller
 Modbus relay controller  
 Developed with:  
 Rust + FLTK + tokio-modbus  
