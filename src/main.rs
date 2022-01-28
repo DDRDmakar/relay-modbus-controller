@@ -153,7 +153,7 @@ impl Main {
 			)
 			.with_align(Align::Left)
 			.with_label("New preset");
-		let menu_preset = Choice::new(
+		let mut menu_preset = Choice::new(
 			SECOND_X,
 			OFFSET + RELAYH*3 + (BUTTONH + OFFSET),
 			INPUTW,
@@ -211,6 +211,7 @@ impl Main {
 		button_set.emit(chan_s, Message::Set);
 		button_get.emit(chan_s, Message::Get);
 		button_save.emit(chan_s, Message::Save);
+		menu_preset.emit(chan_s, Message::Apply);
 
 		wind.set_callback(move |_| {
 			if app::event() == Event::Close {
@@ -255,29 +256,13 @@ impl Main {
 					match fix_pathbuf_parts(&dialog.filenames()) {
 						Some(preset_filename) => {
 							self.add_preset(&preset_filename);
+							self.apply_preset();
 						},
 						None => {},
 					}
 				}
 				Some(Message::Apply) => {
-					match self.menu_preset.value() {
-						-1 => self.button_apply.set_color(Color::Red),
-						i if i >= 0 => {
-							let filename: &Path = &self.presets[i as usize];
-							match self.read_preset(filename) {
-								Ok(p) => {
-									self.set_buttons(&p);
-									self.button_apply.set_color(Color::Background);
-									self.app.redraw();
-								},
-								Err(_) => {
-									self.button_apply.set_color(Color::Red);
-									self.button_apply.redraw();
-								},
-							}
-						},
-						_ => {},
-					};
+					self.apply_preset();
 				},
 				Some(Message::Close) => {
 					println!("Close window");
@@ -334,6 +319,7 @@ impl Main {
 					let new_preset = self.input_preset.value();
 					if !new_preset.is_empty() {
 						self.add_preset(&Path::new(&new_preset));
+						self.apply_preset();
 					}
 				},
 				Some(Message::Save) => {
@@ -444,13 +430,33 @@ impl Main {
 			self.menu_preset.add_choice(&value);
 			self.presets.push_back(filename.into());
 			self.menu_preset.set_value(self.presets.len() as i32 - 1);
-			dbg!(&self.presets);
 			return true;
 		}
 		else {
 			self.menu_preset.set_value(index as i32);
 			return false;
 		}
+	}
+
+	fn apply_preset(&mut self) {
+		match self.menu_preset.value() {
+			-1 => self.button_apply.set_color(Color::Red),
+			i if i >= 0 => {
+				let filename: &Path = &self.presets[i as usize];
+				match self.read_preset(filename) {
+					Ok(p) => {
+						self.set_buttons(&p);
+						self.button_apply.set_color(Color::Background);
+						self.app.redraw();
+					},
+					Err(_) => {
+						self.button_apply.set_color(Color::Red);
+						self.button_apply.redraw();
+					},
+				}
+			},
+			_ => {},
+		};
 	}
 }
 
