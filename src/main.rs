@@ -23,8 +23,19 @@ use tokio_serial::{SerialStream, StopBits, DataBits, Parity};
 
 
 #[derive(Copy, Clone, PartialEq)]
-enum Message { Select, Apply, Set, Get, AddPreset, Close, Save }
+enum Message {
+	AddPreset,
+	SelectPreset,
+	SavePreset,
+	ApplyPreset,
+	RemovePreset,
+	Set,
+	Get,
+	Close,
+}
 
+const TITLE: &str = "R4D3B16 modbus controller";
+const N_RELAYS: usize = 16;
 const BAUDRATE: u32 = 9600;
 
 const OFFSET:   i32 = 10;
@@ -79,7 +90,7 @@ impl Main {
 				WINDOW_W,
 				WINDOW_H,
 			)
-			.with_label("R4D3B16 modbus controller");
+			.with_label(TITLE);
 		
 		let frame = Frame::new(
 			0,
@@ -89,9 +100,9 @@ impl Main {
 			""
 		);
 
-		let mut buttons = Vec::<Button>::with_capacity(16);
+		let mut buttons = Vec::<Button>::with_capacity(N_RELAYS);
 
-		for i in 0..8 {
+		for i in 0..N_RELAYS/2 {
 			let bn: &str = Box::leak((i+1).to_string().into_boxed_str());
 			let mut b = Button::new(
 				OFFSET, OFFSET + RELAYH*(i as i32), RELAYW, RELAYH, bn
@@ -99,7 +110,7 @@ impl Main {
 			b.set_color(Color::Inactive);
 			buttons.push(b);
 		}
-		for i in 0..8 {
+		for i in 0..N_RELAYS/2 {
 			let bn: &str = Box::leak((i+1+8).to_string().into_boxed_str());
 			let mut b = Button::new(
 				OFFSET + RELAYW + HGAP, OFFSET + RELAYH*(7 - i as i32), RELAYW, RELAYH, bn
@@ -170,11 +181,18 @@ impl Main {
 			"..."
 		);
 		let mut button_apply = Button::new(
-			SECOND_X + BUTTONW,
-			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*2,
+			SECOND_X,
+			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*3,
 			BUTTONW,
 			BUTTONH,
 			"Apply"
+		);
+		let mut button_remove = Button::new(
+			SECOND_X,
+			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*4,
+			BUTTONW,
+			BUTTONH,
+			"Remove"
 		);
 
 
@@ -197,8 +215,8 @@ impl Main {
 		wind.show();
 
 		// Set callbacks
-		for i in 0..16 {
-			buttons[i].set_callback(|b| {
+		for e in buttons.iter_mut() {
+			e.set_callback(|b| {
 				if b.color() == Color::Inactive { b.set_color(Color::Green); } else { b.set_color(Color::Inactive); }
 				b.redraw();
 			});
@@ -206,12 +224,13 @@ impl Main {
 		
 		let (chan_s, chan_r) = app::channel::<Message>();
 		input_preset.emit(chan_s, Message::AddPreset);
-		button_select.emit(chan_s, Message::Select);
-		button_apply.emit(chan_s, Message::Apply);
+		button_select.emit(chan_s, Message::SelectPreset);
+		button_apply.emit(chan_s, Message::ApplyPreset);
 		button_set.emit(chan_s, Message::Set);
 		button_get.emit(chan_s, Message::Get);
-		button_save.emit(chan_s, Message::Save);
-		menu_preset.emit(chan_s, Message::Apply);
+		button_save.emit(chan_s, Message::SavePreset);
+		menu_preset.emit(chan_s, Message::ApplyPreset);
+		button_remove.emit(chan_s, Message::RemovePreset);
 
 		wind.set_callback(move |_| {
 			if app::event() == Event::Close {
@@ -250,7 +269,7 @@ impl Main {
 			let msg = self.chan_r.recv();
 			
 			match msg {
-				Some(Message::Select) => {
+				Some(Message::SelectPreset) => {
 					let mut dialog = FileDialog::new(FileDialogType::BrowseFile);
 					dialog.show();
 					match fix_pathbuf_parts(&dialog.filenames()) {
@@ -261,7 +280,7 @@ impl Main {
 						None => {},
 					}
 				}
-				Some(Message::Apply) => {
+				Some(Message::ApplyPreset) => {
 					self.apply_preset();
 				},
 				Some(Message::Close) => {
@@ -322,7 +341,7 @@ impl Main {
 						self.apply_preset();
 					}
 				},
-				Some(Message::Save) => {
+				Some(Message::SavePreset) => {
 					let mut dialog = FileDialog::new(FileDialogType::BrowseSaveFile);
 					dialog.show();
 					//let preset_parts = dialog.filenames();
@@ -339,6 +358,9 @@ impl Main {
 						None => {},
 					}
 				}
+				Some(Message::RemovePreset) => {
+					self.remove_preset();
+				},
 				None => (),
 			}; // End match
 		} // End while
@@ -389,7 +411,7 @@ impl Main {
 	async fn get_relays(&self, com: &str, slave: u8) -> Result<Vec<bool>, Box<dyn std::error::Error>> {
 		let mut ctx = self.open_connection(com, slave).await?;
 		
-		let rsp = tokio::time::timeout(Duration::from_secs(2), ctx.read_holding_registers(0x01, 16)).await??;
+		let rsp = tokio::time::timeout(Duration::from_secs(2), ctx.read_holding_registers(0x01, N_RELAYS)).await??;
 		let state = rsp.iter().map(|&x| x == 1).collect();
 		
 		Ok(state)
@@ -415,6 +437,11 @@ impl Main {
 		let mut contents = String::new();
 		let mut f = std::fs::File::open(filename)?;
 		f.read_to_string(&mut contents)?;
+
+		if contents.len() != N_RELAYS || contents.chars().any(|x| x != '0' && x != '1') {
+			return Err("Invalid preset format".into());
+		}
+			
 		let state = contents.chars().map(|c| c == '1').collect();
 		Ok(state)
 	}
@@ -430,6 +457,7 @@ impl Main {
 			self.menu_preset.add_choice(&value);
 			self.presets.push_back(filename.into());
 			self.menu_preset.set_value(self.presets.len() as i32 - 1);
+			dbg!(&self.presets);
 			return true;
 		}
 		else {
@@ -438,9 +466,26 @@ impl Main {
 		}
 	}
 
-	fn apply_preset(&mut self) {
+	fn remove_preset(&mut self) {
 		match self.menu_preset.value() {
-			-1 => self.button_apply.set_color(Color::Red),
+			i if i >= 0 => {
+				self.presets.remove(i as usize);
+				self.menu_preset.remove(i);
+				self.menu_preset.redraw();
+				dbg!(&self.presets);
+			},
+			_ => {},
+		};
+	}
+	
+	fn apply_preset(&mut self) {
+		let index = match self.menu_preset.choice() {
+			Some(_) => self.menu_preset.value(),
+			None => -1,
+		};
+		dbg!(&index);
+		
+		match index {
 			i if i >= 0 => {
 				let filename: &Path = &self.presets[i as usize];
 				match self.read_preset(filename) {
@@ -455,7 +500,7 @@ impl Main {
 					},
 				}
 			},
-			_ => {},
+			_ => self.button_apply.set_color(Color::Red),
 		};
 	}
 }
