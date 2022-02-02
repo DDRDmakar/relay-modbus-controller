@@ -85,3 +85,15 @@ async fn get_relays(com: &str, slave: u8) -> Result<Vec<bool>, Box<dyn std::erro
 	
 	Ok(state)
 }
+
+fn state_str_to_bool(state: &str) -> Result<Vec<bool>, Box<dyn std::error::Error>> {
+	if state.len() != N_RELAYS || state.chars().any(|x| x != '0' && x != '1') {
+		Err("Invalid preset format".into())
+	} else {
+		Ok(state.chars().map(|c| c == '1').collect())
+	}
+}
+
+fn state_bool_to_str(state: &Vec<bool>) -> String {
+	state.iter().map(|&x| if x {'1'} else {'0'}).collect()
+}
