@@ -9,6 +9,6 @@ Rust + FLTK + tokio-modbus
 cargo build --release
 ```  
 ## Board
-![Alt text](img/R4D3B16.jpg?raw=true "Board")  
+![Alt text](img/board.jpg?raw=true "Board")  
 ## GUI
 ![Alt text](img/window.png?raw=true "GUI")  
