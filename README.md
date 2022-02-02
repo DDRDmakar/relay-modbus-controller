@@ -1,7 +1,14 @@
 # eletechsup R4D3B16 board controller
-Modbus relay controller  
+## Introduction
+A simple lightweight tool to control relay board via Modbus (RS-485).  
+Works on Windows and Linux  
 Developed with:  
 Rust + FLTK + tokio-modbus  
-  
-![Alt text](img/713tfZIT58L._AC_SL1001_.jpg?raw=true "Board")  
+## How to build program
+```
+cargo build --release
+```  
+## Board
+![Alt text](img/R4D3B16.jpg?raw=true "Board")  
+## GUI
 ![Alt text](img/window.png?raw=true "GUI")  

@@ -67,8 +67,9 @@ impl Gui {
 		let app = app::App::default();
 		//.with_scheme(app::Scheme::Gtk);
 
+		const NR2:      i32 = (N_RELAYS as i32) / 2;
 		const WINDOW_W: i32 = OFFSET*2 + RELAYW*2 + HGAP*2 + HGAP/4 + INPUTW;
-		const WINDOW_H: i32 = OFFSET*3 + RELAYH*8 + BUTTONH;
+		const WINDOW_H: i32 = OFFSET*3 + RELAYH*NR2 + BUTTONH;
 		
 		let mut wind = Window::default()
 			.with_size(
@@ -87,7 +88,7 @@ impl Gui {
 
 		let mut buttons = Vec::<Button>::with_capacity(N_RELAYS);
 
-		for i in 0..N_RELAYS/2 {
+		for i in 0..NR2 {
 			let bn: &str = Box::leak((i+1).to_string().into_boxed_str());
 			let mut b = Button::new(
 				OFFSET, OFFSET + RELAYH*(i as i32), RELAYW, RELAYH, bn
@@ -95,10 +96,10 @@ impl Gui {
 			b.set_color(Color::Inactive);
 			buttons.push(b);
 		}
-		for i in 0..N_RELAYS/2 {
-			let bn: &str = Box::leak((i+1+8).to_string().into_boxed_str());
+		for i in 0..NR2 {
+			let bn: &str = Box::leak((i+1+NR2).to_string().into_boxed_str());
 			let mut b = Button::new(
-				OFFSET + RELAYW + HGAP, OFFSET + RELAYH*(7 - i as i32), RELAYW, RELAYH, bn
+				OFFSET + RELAYW + HGAP, OFFSET + RELAYH*(NR2 - 1 - i as i32), RELAYW, RELAYH, bn
 			);
 			b.set_color(Color::Inactive);
 			buttons.push(b);
@@ -106,7 +107,7 @@ impl Gui {
 
 		let mut button_save = Button::new(
 			OFFSET,
-			OFFSET*2 + RELAYH*8,
+			OFFSET*2 + RELAYH*NR2,
 			RELAYW*2 + HGAP,
 			BUTTONH,
 			"Save preset"
@@ -183,14 +184,14 @@ impl Gui {
 
 		let mut button_set = Button::new(
 			SECOND_X,
-			OFFSET*2 + RELAYH*8,
+			OFFSET*2 + RELAYH*NR2,
 			BUTTONW,
 			BUTTONH,
 			"SET"
 		);
 		let mut button_get = Button::new(
 			SECOND_X + BUTTONW,
-			OFFSET*2 + RELAYH*8,
+			OFFSET*2 + RELAYH*NR2,
 			BUTTONW,
 			BUTTONH,
 			"GET"
@@ -364,7 +365,7 @@ impl Gui {
 	}
 
 	fn save_preset(&self, filename: &Path, state: &Vec<bool>) -> Result<(), Box<dyn std::error::Error>> {
-		let state_str: String = state.iter().map(|&x| if x {'1'} else {'0'}).collect();
+		let state_str: String = state_bool_to_str(&state);
 		std::fs::write(filename, state_str)?;
 		Ok(())
 	}
@@ -374,11 +375,7 @@ impl Gui {
 		let mut f = std::fs::File::open(filename)?;
 		f.read_to_string(&mut contents)?;
 
-		if contents.len() != N_RELAYS || contents.chars().any(|x| x != '0' && x != '1') {
-			return Err("Invalid preset format".into());
-		}
-			
-		let state = contents.chars().map(|c| c == '1').collect();
+		let state = state_str_to_bool(&contents)?;
 		Ok(state)
 	}
 
