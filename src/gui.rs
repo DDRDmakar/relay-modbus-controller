@@ -55,6 +55,7 @@ pub struct Gui {
 	button_save:   Button,
 	button_select: Button,
 	button_apply:  Button,
+	button_remove: Button,
 	button_set:    Button,
 	button_get:    Button,
 
@@ -240,6 +241,7 @@ impl Gui {
 			button_save,
 			button_select,
 			button_apply,
+			button_remove,
 			button_set,
 			button_get,
 
