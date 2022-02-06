@@ -2,18 +2,6 @@
 use std::path::PathBuf;
 use std::collections::VecDeque;
 
-use super::*; // variables and functions from main.rs
-
-const TITLE: &str = "R4D3B16 modbus controller";
-
-const OFFSET:   i32 = 10;
-const BUTTONW:  i32 = 80;
-const BUTTONH:  i32 = 30;
-const RELAYW:   i32 = 80;
-const RELAYH:   i32 = 50;
-const HGAP:     i32 = 80;
-const INPUTW:   i32 = BUTTONW * 2;
-
 use fltk::{
 	app,
 	prelude::*,
@@ -25,6 +13,26 @@ use fltk::{
 	input::{Input, IntInput},
 	dialog::{FileDialog, FileDialogType},
 };
+
+use super::*; // variables and functions from main.rs
+
+
+const TITLE: &str = "R4D3B16 modbus controller";
+
+// Window parameters
+const OFFSET:   i32 = 10;
+const BUTTONW:  i32 = 80;
+const BUTTONH:  i32 = 30;
+const RELAYW:   i32 = 80;
+const RELAYH:   i32 = 50;
+const HGAP:     i32 = 80;
+const INPUTW:   i32 = BUTTONW * 2;
+
+// Window colors
+const COLOR_NORMAL: Color = Color::Background;
+const COLOR_ERROR:  Color = Color::Red;
+const COLOR_ON:     Color = Color::Green;
+const COLOR_OFF:    Color = Color::Inactive;
 
 #[derive(Copy, Clone, PartialEq)]
 enum Message {
@@ -94,7 +102,7 @@ impl Gui {
 			let mut b = Button::new(
 				OFFSET, OFFSET + RELAYH*(i as i32), RELAYW, RELAYH, bn
 			);
-			b.set_color(Color::Inactive);
+			b.set_color(COLOR_OFF);
 			buttons.push(b);
 		}
 		for i in 0..NR2 {
@@ -102,7 +110,7 @@ impl Gui {
 			let mut b = Button::new(
 				OFFSET + RELAYW + HGAP, OFFSET + RELAYH*(NR2 - 1 - i as i32), RELAYW, RELAYH, bn
 			);
-			b.set_color(Color::Inactive);
+			b.set_color(COLOR_OFF);
 			buttons.push(b);
 		};
 
@@ -204,7 +212,7 @@ impl Gui {
 		// Set callbacks
 		for e in buttons.iter_mut() {
 			e.set_callback(|b| {
-				if b.color() == Color::Inactive { b.set_color(Color::Green); } else { b.set_color(Color::Inactive); }
+				b.set_color(if b.color() == COLOR_OFF {COLOR_ON} else {COLOR_OFF});
 				b.redraw();
 			});
 		}
@@ -297,16 +305,16 @@ impl Gui {
 							Message::Set => {
 								let s = set_relays(com.as_str(), slave, &butstate);
 								match s.await {
-									Err(_) => self.button_set.set_color(Color::Red),
-									_      => self.button_set.set_color(Color::Background),
+									Err(_) => self.button_set.set_color(COLOR_ERROR),
+									_      => self.button_set.set_color(COLOR_NORMAL),
 								};
 							},
 							Message::Get => {
 								let g = get_relays(com.as_str(), slave);
 								match g.await {
-									Err(_) => self.button_get.set_color(Color::Red),
+									Err(_) => self.button_get.set_color(COLOR_ERROR),
 									Ok(v)  => {
-										self.button_get.set_color(Color::Background);
+										self.button_get.set_color(COLOR_NORMAL);
 										self.set_buttons(&v);
 									},
 								};
@@ -315,8 +323,8 @@ impl Gui {
 						}
 					} else {
 						match msg2 {
-							Message::Set => self.button_set.set_color(Color::Red),
-							Message::Get => self.button_get.set_color(Color::Red),
+							Message::Set => self.button_set.set_color(COLOR_ERROR),
+							Message::Get => self.button_get.set_color(COLOR_ERROR),
 							_ => {},
 						}
 					}
@@ -337,8 +345,8 @@ impl Gui {
 						Some(preset_filename) => {
 							let butstate = self.get_buttons();
 							match self.save_preset(&preset_filename, &butstate) {
-								Ok(_)  => self.button_save.set_color(Color::Background),
-								Err(_) => self.button_save.set_color(Color::Red),
+								Ok(_)  => self.button_save.set_color(COLOR_NORMAL),
+								Err(_) => self.button_save.set_color(COLOR_ERROR),
 							}
 							self.button_save.redraw();
 							self.add_preset(&preset_filename);
@@ -356,18 +364,18 @@ impl Gui {
 		Ok(())
 	}
 
-	fn set_buttons(&mut self, state: &Vec<bool>) {
-		for (i, &e) in state.iter().enumerate() {
-			self.buttons[i].set_color(if e {Color::Green} else {Color::Inactive});
+	fn set_buttons(&mut self, state: &[bool]) {
+		for (b, &s) in self.buttons.iter_mut().zip(state.iter()) {
+			b.set_color(if s {COLOR_ON} else {COLOR_OFF});
 		}
 	}
 
 	fn get_buttons(&mut self) -> Vec<bool> {
-		return self.buttons.iter().map(|b| b.color() == Color::Green).collect();
+		return self.buttons.iter().map(|b| b.color() == COLOR_ON).collect();
 	}
 
-	fn save_preset(&self, filename: &Path, state: &Vec<bool>) -> Result<(), Box<dyn std::error::Error>> {
-		let state_str: String = state_bool_to_str(&state);
+	fn save_preset(&self, filename: &Path, state: &[bool]) -> Result<(), Box<dyn std::error::Error>> {
+		let state_str: String = state_bool_to_str(state);
 		std::fs::write(filename, state_str)?;
 		Ok(())
 	}
@@ -426,16 +434,19 @@ impl Gui {
 				match self.read_preset(filename) {
 					Ok(p) => {
 						self.set_buttons(&p);
-						self.button_apply.set_color(Color::Background);
+						self.button_apply.set_color(COLOR_NORMAL);
 						self.app.redraw();
 					},
 					Err(_) => {
-						self.button_apply.set_color(Color::Red);
+						self.button_apply.set_color(COLOR_ERROR);
 						self.button_apply.redraw();
 					},
 				}
 			},
-			_ => self.button_apply.set_color(Color::Red),
+			_ => {
+				self.button_apply.set_color(COLOR_ERROR);
+				self.button_apply.redraw();
+			},
 		};
 	}
 }

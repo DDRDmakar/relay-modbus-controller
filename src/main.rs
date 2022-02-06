@@ -20,7 +20,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())
 }
 
-fn fix_pathbuf_parts(parts: &Vec<PathBuf>) -> Option<PathBuf> {
+// If path contains spaces, dialog returns it as vector of pathbufs
+// This function concatenates them back into one PathBuf with spaces
+fn fix_pathbuf_parts(parts: &[PathBuf]) -> Option<PathBuf> {
 	if parts.is_empty() {
 		return None;
 	}
@@ -47,27 +49,29 @@ async fn open_connection(com: &str, slave: u8) -> Result<client::Context, Box<dy
 	Ok(ctx)
 }
 
-async fn set_relays(com: &str, slave: u8, state: &Vec<bool>) -> Result<(), Box<dyn std::error::Error>> {
+// For this board we turn relay ON with code 0100
+// and turn it OFF with code 0200
+// No one knows why, but it works :)
+async fn set_relays(com: &str, slave: u8, state: &[bool]) -> Result<(), Box<dyn std::error::Error>> {
 	let mut ctx = open_connection(com, slave).await?;
 
-	// Off
-	for (i, &e) in state.iter().enumerate() {
-		if !e {
-			time::timeout(
-				Duration::from_secs(2),
-				ctx.write_single_register((i as u16)+1, 0x0200)
-			).await??;
-			time::sleep(Duration::from_millis(5)).await;
-		}
-	}
-	// On
-	for (i, &e) in state.iter().enumerate() {
-		if e {
-			time::timeout(
-				Duration::from_secs(2),
-				ctx.write_single_register((i as u16)+1, 0x0100)
-			).await??;
-			time::sleep(Duration::from_millis(5)).await;
+	// Iteration 1: turn off all needed relays
+	// Iteration 2: torn on all needed relays
+	for relay_operation in [false, true] {
+		// For all relays
+		for (i, &e) in state.iter().enumerate() {
+			// If we need to change this relay now
+			if e == relay_operation {
+				time::timeout(
+					Duration::from_secs(2),
+					ctx.write_single_register(
+						(i as u16)+1,
+						if relay_operation {0x0100} else {0x0200}
+					)
+				).await??;
+				// Delay after each operation
+				time::sleep(Duration::from_millis(5)).await;
+			}
 		}
 	}
 	
@@ -94,6 +98,6 @@ fn state_str_to_bool(state: &str) -> Result<Vec<bool>, Box<dyn std::error::Error
 	}
 }
 
-fn state_bool_to_str(state: &Vec<bool>) -> String {
+fn state_bool_to_str(state: &[bool]) -> String {
 	state.iter().map(|&x| if x {'1'} else {'0'}).collect()
 }
