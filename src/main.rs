@@ -57,7 +57,7 @@ async fn set_relays(com: &str, slave: u8, state: &[bool]) -> Result<(), Box<dyn 
 
 	// Iteration 1: turn off all needed relays
 	// Iteration 2: turn on all needed relays
-	for relay_operation in [false, true] {
+	for &relay_operation in &[false, true] {
 		// For all relays
 		for (i, &e) in state.iter().enumerate() {
 			// If we need to change this relay now
