@@ -9,7 +9,7 @@ Rust + FLTK + tokio-modbus
 cargo build --release
 ```  
 ## How to build program for older Linux distributions
-To build this program for older Linux (with older glibc version) tou can use cross-rs tool.  
+To build this program for older Linux (with older glibc version) you can use cross-rs tool.  
 ```
 cargo install cross
 ```  
