@@ -4,6 +4,8 @@ A simple lightweight tool to control relay board via Modbus (RS-485).
 Works on Windows and Linux  
 Developed with:  
 Rust + FLTK + tokio-modbus  
+## Download latest release
+[https://github.com/DDRDmakar/relay-modbus-controller/releases/latest](https://github.com/DDRDmakar/relay-modbus-controller/releases/latest)  
 ## How to build program
 ```
 cargo build --release
