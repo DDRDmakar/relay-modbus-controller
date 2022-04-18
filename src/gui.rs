@@ -100,7 +100,7 @@ impl Gui {
 		for i in 0..NR2 {
 			let bn: &str = Box::leak((i+1).to_string().into_boxed_str());
 			let mut b = Button::new(
-				OFFSET, OFFSET + RELAYH*(i as i32), RELAYW, RELAYH, bn
+				OFFSET + RELAYW + HGAP, OFFSET + RELAYH*(i as i32), RELAYW, RELAYH, bn
 			);
 			b.set_color(COLOR_OFF);
 			buttons.push(b);
@@ -108,7 +108,7 @@ impl Gui {
 		for i in 0..NR2 {
 			let bn: &str = Box::leak((i+1+NR2).to_string().into_boxed_str());
 			let mut b = Button::new(
-				OFFSET + RELAYW + HGAP, OFFSET + RELAYH*(NR2 - 1 - i as i32), RELAYW, RELAYH, bn
+				OFFSET, OFFSET + RELAYH*(NR2 - 1 - i as i32), RELAYW, RELAYH, bn
 			);
 			b.set_color(COLOR_OFF);
 			buttons.push(b);
