@@ -6,12 +6,23 @@ use std::path::{Path, PathBuf};
 
 use tokio::time;
 use tokio_modbus::prelude::*;
-use tokio_serial::{SerialStream, StopBits, DataBits, Parity};
+use tokio_serial::{
+	SerialStream,
+	StopBits,
+	DataBits,
+	Parity,
+	available_ports,
+};
 
 mod gui;
 
 const N_RELAYS: usize = 16;
 const BAUDRATE: u32 = 9600;
+const DELAY_AFTER_OPERATION: u64 = 5; // millis
+
+// Relay commands
+const RELAY_CMD_ON: u16  = 0x0100;
+const RELAY_CMD_OFF: u16 = 0x0200;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,19 +73,26 @@ async fn set_relays(com: &str, slave: u8, state: &[bool]) -> Result<(), Box<dyn 
 		for (i, &e) in state.iter().enumerate() {
 			// If we need to change this relay now
 			if e == relay_operation {
-				time::timeout(
-					Duration::from_secs(2),
-					ctx.write_single_register(
-						(i as u16)+1,
-						if relay_operation {0x0100} else {0x0200}
-					)
-				).await??;
+				set_one_relay(
+					&mut ctx,
+					i,
+					if relay_operation {RELAY_CMD_ON} else {RELAY_CMD_OFF}
+				).await?;
 				// Delay after each operation
-				time::sleep(Duration::from_millis(5)).await;
+				time::sleep(Duration::from_millis(DELAY_AFTER_OPERATION)).await;
 			}
 		}
 	}
 	
+	Ok(())
+}
+
+async fn set_one_relay(ctx: &mut client::Context, relay_number: usize, command: u16) -> Result<(), Box<dyn std::error::Error>> {
+	time::timeout(
+		Duration::from_secs(2),
+		ctx.write_single_register(relay_number as u16 + 1, command)
+	).await??;
+	println!("{} - {}", relay_number, command);
 	Ok(())
 }
 

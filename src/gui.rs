@@ -7,7 +7,7 @@ use fltk::{
 	prelude::*,
 	window::Window,
 	frame::Frame,
-	button::Button,
+	button::{Button, CheckButton},
 	menu::Choice,
 	enums::{Color, Event, Align},
 	input::{Input, IntInput},
@@ -17,16 +17,16 @@ use fltk::{
 use super::*; // variables and functions from main.rs
 
 
-const TITLE: &str = "R4D3B16 modbus controller";
+const TITLE: &str = "Relay modbus controller";
 
 // Window parameters
 const OFFSET:   i32 = 10;
-const BUTTONW:  i32 = 80;
+const BUTTONW:  i32 = 120;
 const BUTTONH:  i32 = 30;
 const RELAYW:   i32 = 80;
 const RELAYH:   i32 = 50;
 const HGAP:     i32 = 80;
-const INPUTW:   i32 = BUTTONW * 2;
+const INPUTW:   i32 = 80 * 3;
 
 // Window colors
 const COLOR_NORMAL: Color = Color::Background;
@@ -36,14 +36,19 @@ const COLOR_OFF:    Color = Color::Inactive;
 
 #[derive(Copy, Clone, PartialEq)]
 enum Message {
+	RefreshCom,
 	AddPreset,
 	SelectPreset,
 	SavePreset,
 	ApplyPreset,
 	RemovePreset,
 	Set,
+	SetRelay(usize, bool),
 	Get,
 	Close,
+	AllRelayOn,
+	AllRelayOff,
+	RealtimeToggle,
 }
 
 #[allow(dead_code)]
@@ -54,16 +59,16 @@ pub struct Gui {
 	
 	buttons: Vec<Button>,
 	presets: VecDeque<PathBuf>,
+	ports:   Vec<String>,
 	
-	input_com:    Input,
+	menu_com:     Choice,
+	menu_preset:  Choice,
 	input_slave:  IntInput,
 	input_preset: Input,
-	menu_preset:  Choice,
+	cb_realtime:  CheckButton,
 	
 	button_save:   Button,
-	button_select: Button,
 	button_apply:  Button,
-	button_remove: Button,
 	button_set:    Button,
 	button_get:    Button,
 
@@ -113,7 +118,7 @@ impl Gui {
 			b.set_color(COLOR_OFF);
 			buttons.push(b);
 		};
-
+		
 		let mut button_save = Button::new(
 			OFFSET,
 			OFFSET*2 + RELAYH*NR2,
@@ -124,17 +129,20 @@ impl Gui {
 
 		const SECOND_X: i32 = OFFSET + RELAYW*2 + HGAP*2 + HGAP/4;
 		
-		let input_com = Input::default()
-			.with_pos(
-				SECOND_X,
-				OFFSET
-			)
-			.with_size(
-				INPUTW,
-				BUTTONH
-			)
-			.with_align(Align::Left)
-			.with_label("Serial port");
+		let mut menu_com = Choice::new(
+			SECOND_X,
+			OFFSET,
+			INPUTW - BUTTONH,
+			BUTTONH,
+			"Serial port"
+		);
+		let mut button_refresh_com = Button::new(
+			SECOND_X + INPUTW - BUTTONH,
+			OFFSET,
+			BUTTONH,
+			BUTTONH,
+			"@refresh"
+		);
 		let mut input_slave = IntInput::default()
 			.with_pos(
 				SECOND_X,
@@ -147,6 +155,21 @@ impl Gui {
 			.with_align(Align::Left)
 			.with_label("Slave id");
 		input_slave.set_value("1");
+
+		let mut button_relay_on = Button::new(
+			SECOND_X,
+			OFFSET + (BUTTONH + OFFSET)*2,
+			BUTTONW,
+			BUTTONH,
+			"ON all"
+		);
+		let mut button_relay_off = Button::new(
+			SECOND_X + BUTTONW,
+			OFFSET + (BUTTONH + OFFSET)*2,
+			BUTTONW,
+			BUTTONH,
+			"OFF all"
+		);
 		
 		let mut input_preset = Input::default()
 			.with_pos(
@@ -162,35 +185,42 @@ impl Gui {
 		let mut menu_preset = Choice::new(
 			SECOND_X,
 			OFFSET + RELAYH*3 + (BUTTONH + OFFSET),
-			INPUTW,
+			INPUTW - BUTTONH,
 			BUTTONH,
 			"Presets"
 		);
 		let presets = VecDeque::<PathBuf>::new();
 
 		let mut button_select = Button::new(
-			SECOND_X,
-			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*2,
-			BUTTONW,
+			SECOND_X + INPUTW - BUTTONH,
+			OFFSET + RELAYH*3 + (BUTTONH + OFFSET),
 			BUTTONH,
-			"..."
+			BUTTONH,
+			"@fileopen"
 		);
 		let mut button_apply = Button::new(
 			SECOND_X,
-			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*3,
+			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*2,
 			BUTTONW,
 			BUTTONH,
 			"Apply"
 		);
 		let mut button_remove = Button::new(
 			SECOND_X,
-			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*4,
+			OFFSET + RELAYH*3 + (BUTTONH + OFFSET)*3,
 			BUTTONW,
 			BUTTONH,
 			"Remove"
 		);
 
-
+		let mut cb_realtime = CheckButton::new(
+			SECOND_X,
+			OFFSET*2 + RELAYH*NR2 - BUTTONH,
+			BUTTONW,
+			BUTTONH,
+			"Realtime"
+		);
+		
 		let mut button_set = Button::new(
 			SECOND_X,
 			OFFSET*2 + RELAYH*NR2,
@@ -205,27 +235,38 @@ impl Gui {
 			BUTTONH,
 			"GET"
 		);
+
+		let ports = refresh_com(&mut menu_com);
 		
 		wind.end();
 		wind.show();
 
+		// Open channel to send signals from GUI
+		let (chan_s, chan_r) = app::channel::<Message>();
+		
 		// Set callbacks
-		for e in buttons.iter_mut() {
-			e.set_callback(|b| {
-				b.set_color(if b.color() == COLOR_OFF {COLOR_ON} else {COLOR_OFF});
+		for (i, e) in buttons.iter_mut().enumerate() {
+			let newchan = chan_s.clone(); // Clone channel to receive messages from each button
+			e.set_callback(move |b| {
+				let is_on = b.color() == COLOR_ON;
+				b.set_color(if is_on {COLOR_OFF} else {COLOR_ON});
 				b.redraw();
+				newchan.send(Message::SetRelay(i, !is_on));
 			});
 		}
 		
-		let (chan_s, chan_r) = app::channel::<Message>();
+		button_refresh_com.emit(chan_s, Message::RefreshCom);
 		input_preset.emit(chan_s, Message::AddPreset);
 		button_select.emit(chan_s, Message::SelectPreset);
 		button_apply.emit(chan_s, Message::ApplyPreset);
+		button_remove.emit(chan_s, Message::RemovePreset);
 		button_set.emit(chan_s, Message::Set);
 		button_get.emit(chan_s, Message::Get);
 		button_save.emit(chan_s, Message::SavePreset);
 		menu_preset.emit(chan_s, Message::ApplyPreset);
-		button_remove.emit(chan_s, Message::RemovePreset);
+		button_relay_on.emit(chan_s, Message::AllRelayOn);
+		button_relay_off.emit(chan_s, Message::AllRelayOff);
+		cb_realtime.emit(chan_s, Message::RealtimeToggle);
 
 		wind.set_callback(move |_| {
 			if app::event() == Event::Close {
@@ -240,16 +281,16 @@ impl Gui {
 			
 			buttons,
 			presets,
+			ports,
 			
-			input_com,
+			menu_com,
+			menu_preset,
 			input_slave,
 			input_preset,
-			menu_preset,
+			cb_realtime,
 			
 			button_save,
-			button_select,
 			button_apply,
-			button_remove,
 			button_set,
 			button_get,
 
@@ -276,6 +317,14 @@ impl Gui {
 						None => {},
 					}
 				}
+				Some(Message::AddPreset) => {
+					let new_preset = self.input_preset.value();
+					if !new_preset.is_empty() {
+						self.add_preset(&Path::new(&new_preset));
+						self.apply_preset();
+						self.input_preset.set_value("");
+					}
+				},
 				Some(Message::ApplyPreset) => {
 					self.apply_preset();
 				},
@@ -283,13 +332,25 @@ impl Gui {
 					println!("Close window");
 					self.app.quit();
 				},
-				Some(Message::Set) | Some(Message::Get) => {
+				Some(Message::Set) |
+				Some(Message::Get) |
+				Some(Message::SetRelay(_,_)) => {
 					let butstate = self.get_buttons();
 					
 					let mut do_apply = true;
 
-					let com = self.input_com.value();
-					if com.is_empty() { do_apply = false; }
+					let com: &str;
+					let value_in_preset_input = self.input_preset.value();
+					if value_in_preset_input.is_empty() {
+						// Normal behavior
+						let com_index = self.menu_com.value();
+						com = if com_index >= 0 { &self.ports[com_index as usize] } else { "" };
+						if com.is_empty() { do_apply = false; }
+					} else {
+						// Behavior if input_preset is not empty
+						// This tweak is needed for situation if com port is not listed
+						com = &value_in_preset_input;
+					}
 					
 					let slave = match self.input_slave.value().parse() {
 						Ok(v) => v,
@@ -303,14 +364,14 @@ impl Gui {
 					if do_apply {
 						match msg2 {
 							Message::Set => {
-								let s = set_relays(com.as_str(), slave, &butstate);
+								let s = set_relays(&com, slave, &butstate);
 								match s.await {
 									Err(_) => self.button_set.set_color(COLOR_ERROR),
-									_      => self.button_set.set_color(COLOR_NORMAL),
+									Ok(_)  => self.button_set.set_color(COLOR_NORMAL),
 								};
 							},
 							Message::Get => {
-								let g = get_relays(com.as_str(), slave);
+								let g = get_relays(&com, slave);
 								match g.await {
 									Err(_) => self.button_get.set_color(COLOR_ERROR),
 									Ok(v)  => {
@@ -319,28 +380,39 @@ impl Gui {
 									},
 								};
 							},
+							Message::SetRelay(i, relay_operation) => {
+								if self.cb_realtime.is_checked() {
+									let mut ctx = open_connection(&com, slave).await?;
+									let s = set_one_relay(
+										&mut ctx,
+										i,
+										if relay_operation {RELAY_CMD_ON} else {RELAY_CMD_OFF}
+									);
+									match s.await {
+										Err(_) => self.button_set.set_color(COLOR_ERROR),
+										Ok(_)  => self.button_set.set_color(COLOR_NORMAL),
+									}
+								}
+							},
 							_ => {},
 						}
 					} else {
 						match msg2 {
-							Message::Set => self.button_set.set_color(COLOR_ERROR),
-							Message::Get => self.button_get.set_color(COLOR_ERROR),
+							Message::Set           => self.button_set.set_color(COLOR_ERROR),
+							Message::Get           => self.button_get.set_color(COLOR_ERROR),
+							Message::SetRelay(_,_) => {
+								if self.cb_realtime.is_checked() {
+									self.button_set.set_color(COLOR_ERROR);
+								}
+							},
 							_ => {},
 						}
 					}
 					self.app.redraw();
 				},
-				Some(Message::AddPreset) => {
-					let new_preset = self.input_preset.value();
-					if !new_preset.is_empty() {
-						self.add_preset(&Path::new(&new_preset));
-						self.apply_preset();
-					}
-				},
 				Some(Message::SavePreset) => {
 					let mut dialog = FileDialog::new(FileDialogType::BrowseSaveFile);
 					dialog.show();
-					//let preset_parts = dialog.filenames();
 					match fix_pathbuf_parts(&dialog.filenames()) {
 						Some(preset_filename) => {
 							let butstate = self.get_buttons();
@@ -357,6 +429,24 @@ impl Gui {
 				Some(Message::RemovePreset) => {
 					self.remove_preset();
 				},
+				Some(Message::RefreshCom) => {
+					self.ports = refresh_com(&mut self.menu_com);
+				},
+				Some(Message::AllRelayOn) | Some(Message::AllRelayOff) => {
+					let color = match msg {
+						Some(Message::AllRelayOn)  => COLOR_ON,
+						Some(Message::AllRelayOff) => COLOR_OFF,
+						_ => COLOR_OFF,
+					};
+					for b in self.buttons.iter_mut() {
+						b.set_color(color);
+					}
+					self.app.redraw();
+					self.realtime_check_and_set();
+				},
+				Some(Message::RealtimeToggle) => {
+					self.realtime_check_and_set();
+				}
 				None => (),
 			}; // End match
 		} // End while
@@ -422,10 +512,7 @@ impl Gui {
 	}
 	
 	fn apply_preset(&mut self) {
-		let index = match self.menu_preset.choice() {
-			Some(_) => self.menu_preset.value(),
-			None => -1,
-		};
+		let index = self.menu_preset.value();
 		dbg!(&index);
 		
 		match index {
@@ -436,6 +523,7 @@ impl Gui {
 						self.set_buttons(&p);
 						self.button_apply.set_color(COLOR_NORMAL);
 						self.app.redraw();
+						self.realtime_check_and_set();
 					},
 					Err(_) => {
 						self.button_apply.set_color(COLOR_ERROR);
@@ -449,4 +537,26 @@ impl Gui {
 			},
 		};
 	}
+
+	fn realtime_check_and_set(&mut self) {
+		if self.cb_realtime.is_checked() {
+			self.chan_s.send(Message::Set);
+		}
+	}
+}
+
+fn refresh_com(menu: &mut Choice) -> Vec<String> {
+	let index = menu.value(); // -1 if no item selected
+	let ports: Vec<String> = available_ports().unwrap().iter().map(|p| p.port_name.clone()).collect();
+
+	menu.clear();
+	for port in &ports {
+		menu.add_choice(&port);
+	}
+
+	if !ports.is_empty() && index != -1 {
+		menu.set_value(index);
+	}
+
+	ports
 }
