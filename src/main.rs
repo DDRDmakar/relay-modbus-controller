@@ -13,8 +13,33 @@ use tokio_serial::{
 	Parity,
 	available_ports,
 };
+use structopt::StructOpt;
 
 mod gui;
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "Relay Modbus Controller", about = "(\\|)(;,,,;)(|/)")]
+struct Opt {
+	/// Do not display window. Just apply state and leave
+	#[structopt(short="w", long="nowin")]
+	no_window: bool,
+
+	/// Project file containing all settings
+	#[structopt(parse(from_os_str))]
+	project: Option<PathBuf>,
+
+	/// State of relays. It is a string of N chars (0 and 1). Overrides project settings
+	#[structopt(short, long, required_if("no_window", "true"), default_value="")]
+	relays: String,
+
+	/// COM port name. Overrides project settings
+	#[structopt(short, long, required_unless("project"), default_value="")]
+	interface: String,
+
+	/// Modbus slave ID
+	#[structopt(short, long, required_unless("project"), default_value="1")]
+	slave: u8,
+}
 
 const N_RELAYS: usize = 16;
 const BAUDRATE: u32 = 9600;
@@ -26,6 +51,9 @@ const RELAY_CMD_OFF: u16 = 0x0200;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+	let opt = Opt::from_args();
+	println!("{:#?}", opt);
+	
 	let mut a = gui::Gui::new();
 	a.run().await?;
 	Ok(())

@@ -517,27 +517,24 @@ impl Gui {
 		let index = self.menu_preset.value();
 		dbg!(&index);
 		
-		match index {
-			i if i >= 0 => {
-				let filename: &Path = &self.presets[i as usize];
-				match self.read_preset(filename) {
-					Ok(p) => {
-						self.set_buttons(&p);
-						self.button_apply.set_color(COLOR_NORMAL);
-						self.app.redraw();
-						self.realtime_check_and_set();
-					},
-					Err(_) => {
-						self.button_apply.set_color(COLOR_ERROR);
-						self.button_apply.redraw();
-					},
-				}
-			},
-			_ => {
-				self.button_apply.set_color(COLOR_ERROR);
-				self.button_apply.redraw();
-			},
-		};
+		if index >= 0 {
+			let filename: &Path = &self.presets[index as usize];
+			match self.read_preset(filename) {
+				Ok(p) => {
+					self.set_buttons(&p);
+					self.button_apply.set_color(COLOR_NORMAL);
+					self.app.redraw();
+					self.realtime_check_and_set();
+				},
+				Err(_) => {
+					self.button_apply.set_color(COLOR_ERROR);
+					self.button_apply.redraw();
+				},
+			}
+		} else {
+			self.button_apply.set_color(COLOR_ERROR);
+			self.button_apply.redraw();
+		}
 	}
 
 	fn realtime_check_and_set(&mut self) {
