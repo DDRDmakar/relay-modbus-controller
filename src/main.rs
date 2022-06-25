@@ -87,6 +87,7 @@ async fn set_relays(com: &str, slave: u8, state: &[bool]) -> Result<(), Box<dyn 
 	Ok(())
 }
 
+#[inline(always)]
 async fn set_one_relay(ctx: &mut client::Context, relay_number: usize, command: u16) -> Result<(), Box<dyn std::error::Error>> {
 	time::timeout(
 		Duration::from_secs(2),

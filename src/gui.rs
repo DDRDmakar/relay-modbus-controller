@@ -9,7 +9,7 @@ use fltk::{
 	frame::Frame,
 	button::{Button, CheckButton},
 	menu::Choice,
-	enums::{Color, Event, Align},
+	enums::{Color, Event, Align, Key},
 	input::{Input, IntInput},
 	dialog::{FileDialog, FileDialogType},
 };
@@ -318,12 +318,14 @@ impl Gui {
 					}
 				}
 				Some(Message::AddPreset) => {
-					let new_preset = self.input_preset.value();
-					if !new_preset.is_empty() {
-						self.add_preset(&Path::new(&new_preset));
-						self.apply_preset();
-						self.input_preset.set_value("");
-					}
+					if app::event_key_down(Key::Enter) {
+						let new_preset = self.input_preset.value();
+						if !new_preset.is_empty() {
+							self.add_preset(&Path::new(&new_preset));
+							self.apply_preset();
+							self.input_preset.set_value("");
+						}
+ 					}
 				},
 				Some(Message::ApplyPreset) => {
 					self.apply_preset();
